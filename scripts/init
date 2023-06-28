@@ -1,0 +1,279 @@
+#!/bin/bash
+
+function usage() {
+
+  cat <<-EOF
+        Usage: $0 [OPTIONS]
+          --mode
+                all          include init_mariadb, init_influxdb, init_lico, cloudtools_import, init_user steps
+                mariadb      create lico database,create lico user,grant all privileges for lico user in mariadb
+                influxdb     create lico database,create lico user,grant all privileges for lico user in influxdb
+                lico         lico init
+                cloudtools   import jupyter, vnc, rstudio templates for CloudTools
+                user         create a lico account in ldap and mariadb
+
+          --inner-db          if true start mariadb,influxdb in the container,else using external mariadb,influxdb,default value is false
+          --help             print the help info
+EOF
+  exit 1
+}
+
+function get_service_account(){
+  result=`lico-password-tool --$1`
+  echo $result
+}
+
+function generate_secret(){
+  key="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  pass=" "
+  for i in {1..16}
+  do
+      num=$[RANDOM%${#key} ]
+      tmp=${key:num:1}
+      pass=${pass}${tmp}
+  done
+  echo $pass
+}
+
+
+function ensure_service_ready(){
+  case $1 in
+    mariadb)
+      ps -ef|grep mysqld|grep -v grep > /dev/null
+      if [ $? -ne 0 ]; then
+        /usr/libexec/mysql-prepare-db-dir /usr/lib/systemd/system/mariadb.service
+        /usr/libexec/mysqld --basedir=/usr -u mysql &
+      fi
+      ;;
+    influxdb)
+      ps -ef|grep -w influxd|grep -v grep > dev/null
+      if [ $? -ne 0 ]; then
+        /usr/bin/influxd -config /etc/influxdb/influxdb.conf -pidfile /var/run/influxdb/influxdb.pid 2> /dev/null &
+      fi
+      ;;
+    ldap)
+      ps -ef|grep nslcd|grep -v grep > /dev/null
+      if [ $? -ne 0 ]; then
+        cp /tmp/nslcd.conf /etc/nslcd.conf
+        sed -i "s/gid nslcd/gid ldap/g" /etc/nslcd.conf
+        nslcd
+      fi
+      ;;
+  esac
+}
+
+function print_color_string {
+  case $1 in
+    "red")
+      echo -e "\033[31m$2\033[0m"
+      ;;
+    "green")
+      echo -e "\033[32m$2\033[0m"
+      ;;
+    "yellow")
+      echo -e "\033[33m$2\033[0m"
+      ;;
+    "blue")
+      echo -e "\033[34m$2\033[0m"
+      ;;
+    *)
+      echo "Unsupported color: $1"
+      ;;
+  esac
+}
+
+function strindex() {
+  x="${1%%$2*}"
+  [[ $x = $1 ]] && echo -1 || echo ${#x}
+
+}
+
+function parse_info() {
+
+ index=`strindex "$1" "),("`
+ data=$1
+ if [ $2 = 'user' ]; then
+   user="${data:1:index-1}"
+   echo $user
+ else
+   passwd="${data:index+3}"
+   echo ${passwd%)}
+ fi
+}
+
+function init_mariadb(){
+  printf '=%.0s' {1..100}
+  echo ""
+  echo "Start init mariadb for lico......"
+  result=`get_service_account mariadb`
+  mysql_licodb_user=`parse_info $result user`
+  mysql_licodb_pass=`parse_info $result password`
+  if [ $INNER_DB = "true" ];then
+    ensure_service_ready mariadb
+  fi
+  sleep 5
+  echo "Create database lico in mariadb..."
+  mysql -e "create database lico character set utf8 collate utf8_bin;"
+  mysql -e "create user '$mysql_licodb_user'@'%' identified by '$mysql_licodb_pass';"
+  mysql -e "grant ALL on lico.* to '$mysql_licodb_user'@'%';"
+  mysql -e "flush privileges;"
+  echo "Finish init mariadb task"
+}
+
+function init_influxdb(){
+  printf '=%.0s' {1..100}
+  echo ""
+  echo "Start init influxdb for lico......"
+  sed -i 's/auth-enabled = true/auth-enabled = false/g' /etc/influxdb/influxdb.conf
+  result=`get_service_account influxdb`
+  influx_licodb_user=`parse_info $result user`
+  influx_licodb_pass=`parse_info $result password`
+  if [ $INNER_DB = "true" ];then
+    ensure_service_ready influxdb
+  fi
+  sleep 5
+
+  echo "Create database lico in influxdb..."
+  influx -execute "create database lico"
+  influx -database lico -execute "create user $influx_licodb_user with password '$influx_licodb_pass' with all privileges"
+  echo "Create database icinga in influxdb..."
+  result2=`get_service_account datasource`
+  influx_icinga_user=`parse_info $result user`
+  influx_icinga_pass=`parse_info $result password`
+  influx -execute "create database icinga"
+  influx -database icinga -execute "create user $influx_icinga_user with password '$influx_icinga_pass' with all privileges"
+
+  echo "Finish init influxdb task"
+}
+
+function lico_password_tool() {
+  printf '=%.0s' {1..100}
+  echo ""
+  echo "Start configure service account for lico......"
+  command  lico-password-tool
+  echo "Finish configure service account task"
+}
+
+function cloudtools_import(){
+  printf '=%.0s' {1..100}
+  echo ""
+  echo "Start import cloudtools templates for lico......"
+  if [ $INNER_DB = "true" ];then
+    ensure_service_ready mariadb
+  fi
+  lico cloudtool import -n 'Jupyter Notebook' -c jupyter -t jupyter -p image_path,jupyter_cmd,password,job_queue,cores_per_node,gpu_per_node,check_timeout,run_time
+  lico cloudtool import -n 'RStudio Server' -c rstudio -t rstudio -p job_queue,cores_per_node,gpu_per_node,password,run_time
+  lico cloudtool import -n 'TigerVNC' -c tigervnc -t tigervnc -p job_queue,cores_per_node,gpu_per_node,runtime_id,password,run_time
+  echo "Finish import cloudtools templates task"
+}
+
+function init_lico(){
+  printf '=%.0s' {1..100}
+  echo ""
+  echo "Start init LiCO......"
+  if [ $INNER_DB = "true" ];then
+    ensure_service_ready mariadb
+    ensure_service_ready influxdb
+  fi
+  command lico init
+  echo "Finish init LiCO task"
+}
+
+function init_user(){
+ printf '=%.0s' {1..100}
+  echo ""
+  echo "Start init admin user for lico......"
+  ensure_service_ready ldap
+  if [ $INNER_DB = "true" ];then
+    ensure_service_ready mariadb
+  fi
+  result=`get_service_account ldap`
+  ldap_pass=`parse_info $result password`
+  ldap_result=`echo "$ldap_pass" | lid hpcadmin -n 2>&1`
+
+  index=`strindex "$ldap_result" "LDAP Bind Password:  hpcadmin"`
+  # hpcadmin existed
+  if [ $index -ne -1 ]; then
+    print_color_string red "hpcadmin user is existed in ldap."
+    import_user_result=`lico import_user -u hpcadmin -r admin`
+    echo -e "Please use \033[32mhpcadmin\033[0m acccount to login web portal."
+    print_color_string yellow "If forgot the password, use lusermod hpcadmin -P <password> to change password."
+    echo "Finish init admin user task"
+    return 0
+  fi
+
+  index=`strindex "$ldap_result" "could not bind to LDAP server"`
+  #connect ldap server failed
+  if [ $index -ne -1 ]; then
+    print_color_string red "Connect to ldap server failed. exit init user step"
+    return -1
+  fi
+  index=`strindex "$ldap_result" "does not exist"`
+  #hpcadmin is not in ldap
+  if [ $index -ne -1 ]; then
+    passwd=`generate_secret`
+    ldap_ressult=`echo "$ldap_pass"|luseradd hpcadmin -P $passwd`
+    import_user_result=`lico import_user -u hpcadmin -r admin`
+    echo "Please use following account / password to login web portal:"
+    print_color_string green  "hpcadmin / $passwd"
+  else #unknow error
+    print_color_string red "Got error and exit init user step: $ldap_result"
+    return -1
+  fi
+
+  echo "Finish init admin user task"
+}
+INNER_DB='false'
+
+ while [[ $# -gt 0 ]]
+  do
+    key="$1"
+    case $key in
+        --mode)
+        mode="$2"
+        shift
+        ;;
+        --inner-db)
+        INNER_DB="$2"
+        shift
+        ;;
+    esac
+    shift
+  done
+
+case $mode in
+   all)
+    echo "Start init all tasks for lico......"
+    if [ $INNER_DB = "true" ];then
+      init_mariadb
+      init_influxdb
+    fi
+    init_lico
+    cloudtools_import
+    init_user
+    echo "All init tasks are finished!"
+    ;;
+   mariadb)
+    if [ $INNER_DB = "false" ];then
+      echo "Only when inner_db is set to true can mariadb be initialized."
+    else
+      init_mariadb
+    fi
+    ;;
+   influxdb)
+     if [ $INNER_DB = "false" ];then
+      echo "Only when inner_db is set to true can influxdb be initialized."
+    else
+      init_influxdb
+    fi
+    ;;
+   cloudtools)
+    cloudtools_import
+    ;;
+   lico)
+    init_lico
+    ;;
+   user)
+    init_user
+    ;;
+esac

@@ -1,0 +1,3 @@
+vendored-dependencies:
+- name: openlico-docker
+  path: LICENSE

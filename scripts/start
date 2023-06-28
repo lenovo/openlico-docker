@@ -1,0 +1,18 @@
+#!/bin/bash
+cp /opt/munge.key /etc/munge/munge.key
+chown munge:munge /etc/munge/munge.key
+
+sed -i "s/listen\s*[0-9]\{1,5\}/listen ${http_port}/" /etc/nginx/nginx.conf
+sed -i "s/listen\s*\[::\]:[0-9]\{1,5\}/listen [::]:${http_port}/" /etc/nginx/nginx.conf
+sed -i "s/listen\s*[0-9]\{1,5\}\s*ssl\s*http2;/listen ${https_port} ssl http2;/"  /etc/nginx/conf.d/openlico.conf.d/00-bind.conf
+
+if [ $inner_db = 'true' ];then
+  sed -i 's/# auth-enabled = false/auth-enabled = true/g' /etc/influxdb/influxdb.conf
+  sed -i 's/auth-enabled = false/auth-enabled = true/g' /etc/influxdb/influxdb.conf
+fi
+cp /tmp/nslcd.conf /etc/nslcd.conf
+sed -i "s/gid nslcd/gid ldap/g" /etc/nslcd.conf
+
+lico start --start-only
+lico start --prepare-only
+tail -f /var/log/lico/lico-core.log

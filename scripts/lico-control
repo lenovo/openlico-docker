@@ -1,0 +1,402 @@
+#!/usr/bin/env bash
+LICO_IMAGE=openlico:7.1.0
+CONTAINER_NAME=lico
+LICO_INI_FILE=/etc/lico/lico.ini
+DB_MNT_DIR=/var/lib/lico_db_data
+ALERT_INI_FILE=/etc/lico/lico.ini.d/alert.ini
+
+
+function usage() {
+  cat <<-EOF
+        OpenLiCO Docker Container Deployment Command Line
+
+        Usage: lico-control [OPTIONS]
+            lico-control prepare
+            lico-control run
+            lico-control --help
+
+        Options:
+           --help       Print this help message and exit
+
+        Subcommands:
+            prepare     Create mount folder and prepare file
+            init        Init data for LiCO, CloudTools, admin user
+            run         Create and run a new LiCO container from an image
+            start       Start a stopped LiCO container
+            stop        Stop a running LiCO container
+            restart     Restart lico container
+            remove      Remove lico container
+EOF
+  exit 1
+}
+
+function  usage_init() {
+  cat <<-EOF
+        Init data for LiCO, CloudTools, admin user
+
+        Usage: lico-control init [OPTIONS]
+            lico-control init --mode [mode]
+            lico-control init --mode [mode] --image [name:tag]
+            lico-control init --mode [mode] --image [name:tag] --inner-db [true|false]
+
+
+        Options:
+            --mode         The value is required and can be set to one of the following values:
+                                 1. all          Init all the components,such as init_lico, cloudtools_import, init_user etc
+                                 2. config       Init password by running lico-password-tool
+                                 3. mariadb      Init mariadb inside the container
+                                 4. influxdb     Init influxdb inside the container
+                                 5. lico         Init LiCO
+                                 6. cloudtools   Init CloudTools by importing cvat, jupyter, rstudio, vnc templates
+                                 7. user         Create a lico account in ldap and mariadb
+            --inner-db     If true start mariadb,influxdb in the container,
+                           else using external mariadb,influxdb,default value is false
+            --image   Name and tag of LiCO image: name:tag, default to openlico:7.1.0
+            --help         Print this helo message and exit
+
+EOF
+  exit 1
+}
+
+function  usage_run() {
+  cat <<-EOF
+        Run lico container
+
+        Usage: lico-control run [OPTIONS]
+            lico-control run
+            lico-control run --http-port [port]
+            lico-control run --https-port [port]
+            lico-control run --oneapi-path [path] --image [name:tag]
+            lico-control run --oneapi-path [path] --image [name:tag] --inner-db [true|false]
+
+
+
+        Options:
+            --http-port    Http port for lico web, default is 8080
+            --https-port   Https port for lico web, default is 443
+            --oneapi-path  Installation path of Intel oneAPI on host
+            --inner-db     If true start mariadb,influxdb in the container,
+                           else using external mariadb,influxdb,default value is false
+            --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.1.0
+            --help         Print this help message and exit
+EOF
+  exit 1
+}
+
+
+
+function  usage_prepare() {
+  cat <<-EOF
+        Create mount folder and prepare file
+
+        Usage: lico-control prepare [OPTIONS]
+            lico-control prepare
+            lico-control prepare --image [name:tag]
+
+        Options:
+            --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.1.0
+            --help         Print this help message and exit
+EOF
+  exit 1
+}
+
+
+
+function parse_config_dirs() {
+  local dirs=()
+
+  user_share_dir=$(docker run -v ${LICO_INI_FILE}:${LICO_INI_FILE} --network host --rm ${lico_image}  python3 -c "import toml;print(toml.load('${LICO_INI_FILE}')['LICO'].get('USER_SHARE_DIR', []))")
+  share_dir=$(docker run -v ${LICO_INI_FILE}:${LICO_INI_FILE} --network host --rm ${lico_image} python3 -c "import toml;print(toml.load('${LICO_INI_FILE}')['LICO'].get('SHARE_DIR', '/home'))")
+  alert_scripts_dir=$(docker run -v ${ALERT_INI_FILE}:${ALERT_INI_FILE} --network host --rm ${lico_image} python3 -c "import toml;print(toml.load('${ALERT_INI_FILE}')['ALERT'].get('SCRIPTS_DIR', '/var/lib/lico/core/alert/scripts'))")
+  temp_dirs=`echo $user_share_dir|sed 's/\]//g'|sed 's/\[//g'`
+  local IFS=','   # 设置分隔符为逗号
+  local user_dir=($temp_dirs)
+  for((i=0;i<${#user_dir[@]};i++))
+  do
+    dirs[i]=${user_dir[i]}
+  done
+  dirs[${#dirs[*]}]=$share_dir
+  dirs[${#dirs[*]}]=$alert_scripts_dir
+  echo ${dirs[@]}
+
+}
+
+function prepare() {
+   local lico_image
+   local etc_lico_file=/etc/lico/
+
+  while [[ $# -gt 0 ]]
+  do
+      key="$1"
+      case $key in
+          --image)
+          lico_image=$2
+          shift
+          ;;
+          *)
+          usage_prepare
+          ;;
+      esac
+      shift
+  done
+  if [ -d "$etc_lico_file" ];then
+    read -r -p "The command will overwrite the config file(including /etc/lico etc.),
+      if you once run lico-control prepare.Please make a backup if necessary.
+      Do you want to execute the prepare command ? yes/no:  " answer
+    case "${answer}" in
+        [yY]|[yY][eE][sS])
+            echo 'Start prepare mount folder and config files......'
+            ;;
+        *)
+          exit 1
+          ;;
+    esac
+  else
+    echo 'Start prepare mount folder and config files......'
+  fi
+
+  if [ -z ${lico_image} ]; then
+      lico_image=$LICO_IMAGE
+  fi
+
+  docker run -d --network host --name ${CONTAINER_NAME} ${lico_image} /bin/bash
+  docker cp ${CONTAINER_NAME}:/etc/lico/ /etc
+
+  docker stop ${CONTAINER_NAME} && docker rm ${CONTAINER_NAME}
+  echo "Prepare mount folder and config files finished"
+}
+
+function init() {
+   if [ $# -eq 0 ];then
+    usage_init
+   fi
+
+
+   local subcmd=$@
+   local volumes=''
+   local inner_db='false'
+   local lico_image
+
+    while [[ $# -gt 0 ]]
+      do
+          key="$1"
+          case $key in
+              --mode)
+                  mode=$2
+                  case $mode in
+                      config)
+                          ;;
+                      all)
+                          ;;
+                      mariadb)
+                          ;;
+                      influxdb)
+                          ;;
+                      cloudtools)
+                          ;;
+                      lico)
+                          ;;
+                      user)
+                          ;;
+                      *)
+                        usage_init
+                        ;;
+                  esac
+                  shift
+                  ;;
+              --inner-db)
+                  inner_db=$2
+                  shift
+                  ;;
+              --image)
+                  lico_image=$2
+                  shift
+                  ;;
+              *)
+                  usage_init
+                  ;;
+          esac
+          shift
+      done
+
+  subcmd=$(echo "$subcmd" |sed -r 's/--image(\s|=)*\S+//g')
+
+  if [ -z ${lico_image} ]; then
+      lico_image=$LICO_IMAGE
+  fi
+
+  if [ $inner_db = 'true' ]; then
+    mkdir -p $DB_MNT_DIR/{mysql,influxdb}
+    volumes="${volumes} -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
+  else
+    sed -i "/autostart/,/autorestart/s/true/false/" /etc/lico/lico.supervisor.d/influx.ini
+    sed -i "/autostart/,/autorestart/s/true/false/" /etc/lico/lico.supervisor.d/mariadb.ini
+  fi
+
+   docker run -it \
+      -v /root/.ssh:/root/.ssh \
+      -v /etc/slurm:/etc/slurm  \
+      -v /etc/munge/munge.key:/opt/munge.key \
+      -v /opt/ohpc/pub:/opt/ohpc/pub \
+      -v /etc/nslcd.conf:/tmp/nslcd.conf \
+      -v /etc/libuser.conf:/etc/libuser.conf \
+      -v /etc/skel:/etc/skel \
+      -v /etc/localtime:/etc/localtime \
+      -v /var/log/lico:/var/log/lico \
+      -v /etc/lico:/etc/lico \
+      -v /var/lib/lico/core/billing:/var/lib/lico/core/billing \
+      $volumes \
+      --privileged=true --rm --network host --name ${CONTAINER_NAME} ${lico_image} /opt/init $subcmd
+}
+
+function run(){
+    local env_option=""
+    local volumes=""
+    local http_port=8080
+    local https_port=443
+    local oneapi_path=""
+    local inner_db='false'
+    local lico_image
+
+    ARGS=`getopt  --long http-port:,https-port:,oneapi-path:,inner-db:,image:  -n "$0" -- "$@"`
+
+    if [ $? != 0 ];then
+            usage_run
+            exit 1
+    fi
+    #重新排列参数顺序
+    eval set -- "${ARGS}"
+    #通过shift和while循环处理参数
+    while true
+    do
+      case "$1" in
+          --http-port)
+              http_port=$2
+              shift
+              ;;
+          --https-port)
+              https_port=$2
+              shift
+              ;;
+          --oneapi-path)
+              oneapi_path=$2
+              shift
+              ;;
+          --inner-db)
+              inner_db=$2
+              shift
+              ;;
+          --image)
+            lico_image=$2
+            shift
+            ;;
+           --)
+            shift
+            if [ "$1" ]; then
+              usage_run
+            fi
+            break
+            ;;
+          *)
+            usage_run
+            ;;
+      esac
+    shift
+    done
+
+  if [ -z ${lico_image} ]; then
+      lico_image=$LICO_IMAGE
+  fi
+  echo "Start run openlico container......"
+  env_option="$env_option -e http_port=${http_port}"
+  env_option="$env_option -e https_port=${https_port}"
+  env_option="$env_option -e oneapi_path=${oneapi_path}"
+  env_option="$env_option -e inner_db=${inner_db}"
+
+  dirs=`parse_config_dirs`
+  echo "mount dirs: ${dirs[*]}"
+  for dir in ${dirs[@]}
+  do
+    mnt=`echo $dir|sed 's/["'\'']//g'`
+    volumes="$volumes -v $mnt:$mnt "
+  done
+  if [ -n "$oneapi_path" ]; then
+    echo "mount intel oneapi path: ${oneapi_path}"
+    volumes="$volumes -v $oneapi_path:$oneapi_path "
+  fi
+  if [ $inner_db = 'true' ]; then
+    volumes="$volumes -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
+  fi
+  docker run -d \
+  -v /root/.ssh:/root/.ssh \
+  -v /etc/slurm:/etc/slurm  \
+  -v /etc/munge/munge.key:/opt/munge.key \
+  -v /opt/ohpc/pub:/opt/ohpc/pub \
+  -v /etc/nslcd.conf:/tmp/nslcd.conf \
+  -v /etc/libuser.conf:/etc/libuser.conf \
+  -v /etc/skel:/etc/skel \
+  -v /etc/localtime:/etc/localtime \
+  -v /var/log/lico:/var/log/lico \
+  -v /etc/lico:/etc/lico \
+  -v /var/lib/lico/core/billing:/var/lib/lico/core/billing \
+  $volumes \
+  $env_option \
+  --name ${CONTAINER_NAME}   --log-driver=journald --privileged=true --restart always --network host  --health-cmd "echo status|lico ctl|egrep 'lico-core\s+RUNNING'" --health-interval 5s --health-retries 3  --health-start-period 5s --health-timeout 5s ${lico_image}
+  echo "Run openlico container finished!"
+
+}
+
+function start(){
+ echo "Start lico container...."
+ docker start ${CONTAINER_NAME}
+ echo "Start lico container finished"
+}
+
+function stop(){
+ echo "Stop lico container...."
+ docker stop ${CONTAINER_NAME}
+ echo "Stop lico container finished"
+}
+
+function restart(){
+ echo "Restart lico container...."
+ docker restart ${CONTAINER_NAME}
+ echo "Restart lico container finished"
+}
+
+function remove(){
+ echo "Remove lico container...."
+ docker rm ${CONTAINER_NAME}
+ echo "Remove lico container finished"
+}
+
+cmd=$1
+
+case $cmd in
+  prepare)
+    shift 1
+    prepare $@
+    ;;
+  init)
+    shift 1
+    init $@
+    ;;
+  run)
+    run $@
+    ;;
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    restart
+    ;;
+  remove)
+    remove
+    ;;
+  *)
+    usage
+    ;;
+esac
