@@ -17,10 +17,12 @@ RUN authselect select nslcd with-mkhomedir --force
 
 #mariadb
 RUN dnf install --nodocs -y mariadb-server  \
-    && sed -i "/\[mysqld\]/a\max-connections=1024" /etc/my.cnf.d/mariadb-server.cnf 
+    && sed -i "/\[mysqld\]/a\max-connections=1024" /etc/my.cnf.d/mariadb-server.cnf
 
-#rabbitmq
-RUN dnf install --nodocs -y https://packagecloud.io/rabbitmq/rabbitmq-server/packages/el/8/rabbitmq-server-3.9.10-1.el8.noarch.rpm/download.rpm https://github.com/rabbitmq/erlang-rpm/releases/download/v23.3.4.14/erlang-23.3.4.14-1.el8.x86_64.rpm
+#redis
+RUN  dnf module reset redis \
+     && dnf module enable -y redis:6 \
+     && dnf install -y redis
 
 #influxdb
 RUN dnf install --nodocs -y https://dl.influxdata.com/influxdb/releases/influxdb-1.11.1.x86_64.rpm
