@@ -162,6 +162,7 @@ function cloudtools_import(){
     ensure_service_ready mariadb
   fi
   lico cloudtool import -n 'Jupyter Notebook' -c jupyter -t jupyter -p image_path,jupyter_cmd,password,job_queue,cores_per_node,gpu_per_node,check_timeout,run_time
+  lico cloudtool import -n 'JupyterLab' -c jupyterlab -t jupyterlab -p image_path,jupyterlab_cmd,password,job_queue,cores_per_node,gpu_per_node,check_timeout,run_time
   lico cloudtool import -n 'RStudio Server' -c rstudio -t rstudio -p job_queue,cores_per_node,gpu_per_node,password,run_time
   lico cloudtool import -n 'TigerVNC' -c tigervnc -t tigervnc -p job_queue,cores_per_node,gpu_per_node,runtime_id,password,run_time
   echo "Finish import cloudtools templates task"
