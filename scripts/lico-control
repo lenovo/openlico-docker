@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-LICO_IMAGE=openlico:7.1.0
+LICO_IMAGE=openlico:7.2.0
 CONTAINER_NAME=lico
 LICO_INI_FILE=/etc/lico/lico.ini
 DB_MNT_DIR=/var/lib/lico_db_data
@@ -51,7 +51,7 @@ function  usage_init() {
                                  7. user         Create a lico account in ldap and mariadb
             --inner-db     If true start mariadb,influxdb in the container,
                            else using external mariadb,influxdb,default value is false
-            --image   Name and tag of LiCO image: name:tag, default to openlico:7.1.0
+            --image   Name and tag of LiCO image: name:tag, default to openlico:7.2.0
             --help         Print this helo message and exit
 
 EOF
@@ -77,7 +77,7 @@ function  usage_run() {
             --oneapi-path  Installation path of Intel oneAPI on host
             --inner-db     If true start mariadb,influxdb in the container,
                            else using external mariadb,influxdb,default value is false
-            --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.1.0
+            --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.2.0
             --help         Print this help message and exit
 EOF
   exit 1
@@ -94,7 +94,7 @@ function  usage_prepare() {
             lico-control prepare --image [name:tag]
 
         Options:
-            --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.1.0
+            --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.2.0
             --help         Print this help message and exit
 EOF
   exit 1

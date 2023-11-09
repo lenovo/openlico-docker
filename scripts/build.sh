@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-LICO_IMAGE=openlico:7.1.0
+LICO_IMAGE=openlico:7.2.0
 
 function usage() {
 
@@ -13,7 +13,7 @@ function usage() {
         Options:
             --help             Print the help info
             --genSslCert       Generate nginx ssl certification
-            --image            Name and tag of LiCO image: name:tag, default to openlico:7.1.0
+            --image            Name and tag of LiCO image: name:tag, default to openlico:7.2.0
             --no-cache         Do not use cache when building the LiCO image
             --npm-registry     Use npm registry to accelerate building web portal, such as <https://registry.npm.taobao.org/>
             --pypi-url         Use pypi url to accelerate install python package, such as<https://pypi.tuna.tsinghua.edu.cn/simple>
