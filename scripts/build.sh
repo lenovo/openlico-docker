@@ -84,6 +84,13 @@ function generateSslCert() {
   fi
 
   docker run -v $PWD/openlico-portal:/openlico-portal -e npm_registry=$npm_registry node:16.19.1-alpine3.16 sh -c "cd openlico-portal &&npm config set registry ${npm_registry} && npm install && npm run build"
+  mkdir -p njs/rpmbuild
+  \cp openlico-docker/nginx/nginx-mod-njs.spec  njs/
+  docker run -v $PWD/njs/rpmbuild:/root/rpmbuild -v $PWD/njs/nginx-mod-njs.spec:/root/nginx-mod-njs.spec rockylinux:8.6.20227707 sh -c "dnf install -y wget which rpm-build gcc libxslt-devel \
+         && dnf --enablerepo=devel install -y libedit-devel && dnf module enable -y nginx:1.20 \
+         && dnf install -y  nginx-mod-devel &&  wget http://hg.nginx.org/njs/archive/0.8.0.tar.gz -O /root/rpmbuild/SOURCES/njs-0.8.0.tar.gz \
+         && cd /root && rpmbuild -ba nginx-mod-njs.spec"
+
   docker build $no_cache --build-arg npm_registry=$npm_registry --build-arg pypi_url=$pypi_url -f Dockerfile -t ${lico_image} .
     if [ $? -ne 0 ]; then
     echo "Build openlico image failed"

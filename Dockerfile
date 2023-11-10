@@ -2,6 +2,7 @@ FROM rockylinux:8.6.20227707
 
 COPY openlico-portal/dist /usr/share/openlico-portal/
 COPY openlico-docker/authselect /usr/share/authselect/vendor/nslcd/
+COPY njs/rpmbuild/RPMS/x86_64  /var/njs/
 ARG pypi_url
 ENV pypi_url=${pypi_url}
 
@@ -30,7 +31,8 @@ RUN dnf install --nodocs -y https://dl.influxdata.com/influxdb/releases/influxdb
 #nginx
 RUN  dnf module reset nginx \
      && dnf module enable -y nginx:1.20 \
-     && dnf install -y nginx nginx-mod-http-perl
+     && dnf install -y nginx \
+     && dnf install -y /var/njs/nginx-mod-http-js-0.8.0-el8.7.1.x86_64.rpm
 
 #singularity
 RUN dnf install -y singularity-ce
