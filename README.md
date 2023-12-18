@@ -29,6 +29,7 @@ chmod +x /usr/bin/lico-control
 
 ```
 
+
 ### 2. Generate Nginx https certification
 
 ```sh
