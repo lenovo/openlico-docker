@@ -79,6 +79,7 @@ function  usage_run() {
             --inner-db     If true start mariadb,influxdb in the container,
                            else using external mariadb,influxdb,default value is false
             --image        Name and tag of LiCO image(format: "name:tag"), default to openlico:7.2.0
+            --docker-args  Apply docker run args, make sure put it to last postion
             --help         Print this help message and exit
 EOF
   exit 1
@@ -258,15 +259,8 @@ function run(){
     local oneapi_path=""
     local inner_db='false'
     local lico_image
+    local docker_args=""
 
-    ARGS=`getopt  --long http-port:,https-port:,oneapi-path:,inner-db:,image:  -n "$0" -- "$@"`
-
-    if [ $? != 0 ];then
-            usage_run
-            exit 1
-    fi
-    #重新排列参数顺序
-    eval set -- "${ARGS}"
     #通过shift和while循环处理参数
     while true
     do
@@ -290,6 +284,11 @@ function run(){
           --image)
             lico_image=$2
             shift
+            ;;
+          --docker-args)
+            shift
+            docker_args=$@
+            break
             ;;
            --)
             shift
@@ -342,7 +341,7 @@ function run(){
   -v /var/lib/lico/core/billing:/var/lib/lico/core/billing \
   $volumes \
   $env_option \
-  --name ${CONTAINER_NAME}   --log-driver=journald --privileged=true --restart always --network host  --health-cmd "echo status|lico ctl|egrep 'lico-core\s+RUNNING'" --health-interval 5s --health-retries 3  --health-start-period 5s --health-timeout 5s ${lico_image}
+  --name ${CONTAINER_NAME}   --log-driver=journald --privileged=true --restart always --network host ${docker_args} --health-cmd "echo status|lico ctl|egrep 'lico-core\s+RUNNING'" --health-interval 5s --health-retries 3  --health-start-period 5s --health-timeout 5s ${lico_image}
   echo "Run openlico container finished!"
 
 }
@@ -388,6 +387,7 @@ case $cmd in
     init $@
     ;;
   run)
+    shift 1
     run $@
     ;;
   start)
