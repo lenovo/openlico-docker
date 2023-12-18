@@ -26,6 +26,7 @@ function usage() {
             stop        Stop a running LiCO container
             restart     Restart lico container
             remove      Remove lico container
+            docker-cmd  Execute docker command
 EOF
   exit 1
 }
@@ -370,6 +371,11 @@ function remove(){
  echo "Remove lico container finished"
 }
 
+function dockercmd(){
+ echo "Execute docker command"
+ docker $@
+}
+
 cmd=$1
 
 case $cmd in
@@ -395,6 +401,10 @@ case $cmd in
     ;;
   remove)
     remove
+    ;;
+  docker-cmd)
+    shift
+    dockercmd $@
     ;;
   *)
     usage
