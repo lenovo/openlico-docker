@@ -4,7 +4,60 @@ CONTAINER_NAME=lico
 LICO_INI_FILE=/etc/lico/lico.ini
 DB_MNT_DIR=/var/lib/lico_db_data
 ALERT_INI_FILE=/etc/lico/lico.ini.d/alert.ini
+ENSURE_PATH=("/root/.ssh" "/etc/slurm"  "/etc/libuser.conf" "/etc/lico"  "/opt/ohpc/pub" "/etc/localtime")
+ENSURE_VOLUMES=""
 
+
+function print_color_string {
+  case $1 in
+    "red")
+      echo -e "\033[31m$2\033[0m"
+      ;;
+    "green")
+      echo -e "\033[32m$2\033[0m"
+      ;;
+    "yellow")
+      echo -e "\033[33m$2\033[0m"
+      ;;
+    "blue")
+      echo -e "\033[34m$2\033[0m"
+      ;;
+    *)
+      echo "Unsupported color: $1"
+      ;;
+  esac
+}
+
+function file_exists() {
+  if [ -d "$1" ]; then
+    return 0
+  elif [ -f "$1" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function check_file_exists() {
+      file_exists $1
+      if [ $? -ne 0 ]; then
+        print_color_string red "$1 is not existed"
+        exit 1
+      fi
+}
+
+function check_all_ensure_path() {
+    for f in ${ENSURE_PATH[@]}
+    do
+      file_exists $f
+      if [ $? -ne 0 ]; then
+        print_color_string red "$f is not existed"
+        exit 1
+      fi
+      ENSURE_VOLUMES="$ENSURE_VOLUMES -v $f:$f "
+    done
+    return 0
+}
 
 function usage() {
   cat <<-EOF
@@ -175,7 +228,7 @@ function init() {
 
 
    local subcmd=$@
-   local volumes=''
+   local extra_volumes=""
    local inner_db='false'
    local lico_image
 
@@ -221,6 +274,11 @@ function init() {
           shift
       done
 
+  check_file_exists "/etc/nslcd.conf"
+  check_file_exists "/etc/munge/munge.key"
+
+  check_all_ensure_path
+
   subcmd=$(echo "$subcmd" |sed -r 's/--image(\s|=)*\S+//g')
 
   if [ -z ${lico_image} ]; then
@@ -229,31 +287,27 @@ function init() {
 
   if [ $inner_db = 'true' ]; then
     mkdir -p $DB_MNT_DIR/{mysql,influxdb}
-    volumes="${volumes} -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
+    extra_volumes="${extra_volumes} -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
   else
     sed -i "/autostart/,/autorestart/s/true/false/" /etc/lico/lico.supervisor.d/influx.ini
     sed -i "/autostart/,/autorestart/s/true/false/" /etc/lico/lico.supervisor.d/mariadb.ini
   fi
 
+  extra_volumes="$extra_volumes -v /etc/skel:/etc/skel \
+                -v /var/log/lico:/var/log/lico \
+                -v /var/lib/lico/core/billing:/var/lib/lico/core/billing"
+
    docker run -it \
-      -v /root/.ssh:/root/.ssh \
-      -v /etc/slurm:/etc/slurm  \
       -v /etc/munge/munge.key:/opt/munge.key \
-      -v /opt/ohpc/pub:/opt/ohpc/pub \
       -v /etc/nslcd.conf:/tmp/nslcd.conf \
-      -v /etc/libuser.conf:/etc/libuser.conf \
-      -v /etc/skel:/etc/skel \
-      -v /etc/localtime:/etc/localtime \
-      -v /var/log/lico:/var/log/lico \
-      -v /etc/lico:/etc/lico \
-      -v /var/lib/lico/core/billing:/var/lib/lico/core/billing \
-      $volumes \
+      $ENSURE_VOLUMES \
+      $extra_volumes \
       --privileged=true --rm --network host --name ${CONTAINER_NAME} ${lico_image} /opt/init $subcmd
 }
 
 function run(){
     local env_option=""
-    local volumes=""
+    local extra_volumes=""
     local http_port=8080
     local https_port=443
     local oneapi_path=""
@@ -318,28 +372,30 @@ function run(){
   for dir in ${dirs[@]}
   do
     mnt=`echo $dir|sed 's/["'\'']//g'`
-    volumes="$volumes -v $mnt:$mnt "
+    extra_volumes="$extra_volumes -v $mnt:$mnt "
   done
   if [ -n "$oneapi_path" ]; then
     echo "mount intel oneapi path: ${oneapi_path}"
-    volumes="$volumes -v $oneapi_path:$oneapi_path "
+    extra_volumes="$extra_volumes -v $oneapi_path:$oneapi_path "
   fi
   if [ $inner_db = 'true' ]; then
-    volumes="$volumes -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
+    extra_volumes="$extra_volumes -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
   fi
+
+  check_file_exists "/etc/nslcd.conf"
+  check_file_exists "/etc/munge/munge.key"
+
+  check_all_ensure_path
+
+  extra_volumes="$extra_volumes -v /etc/skel:/etc/skel \
+                -v /var/log/lico:/var/log/lico \
+                -v /var/lib/lico/core/billing:/var/lib/lico/core/billing"
+
   docker run -d \
-  -v /root/.ssh:/root/.ssh \
-  -v /etc/slurm:/etc/slurm  \
   -v /etc/munge/munge.key:/opt/munge.key \
-  -v /opt/ohpc/pub:/opt/ohpc/pub \
   -v /etc/nslcd.conf:/tmp/nslcd.conf \
-  -v /etc/libuser.conf:/etc/libuser.conf \
-  -v /etc/skel:/etc/skel \
-  -v /etc/localtime:/etc/localtime \
-  -v /var/log/lico:/var/log/lico \
-  -v /etc/lico:/etc/lico \
-  -v /var/lib/lico/core/billing:/var/lib/lico/core/billing \
-  $volumes \
+  $ENSURE_VOLUMES \
+  $extra_volumes \
   $env_option \
   --name ${CONTAINER_NAME}   --log-driver=journald --privileged=true --restart always --network host ${docker_args} --health-cmd "echo status|lico ctl|egrep 'lico-core\s+RUNNING'" --health-interval 5s --health-retries 3  --health-start-period 5s --health-timeout 5s ${lico_image}
   echo "Run openlico container finished!"
