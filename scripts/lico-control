@@ -316,7 +316,7 @@ function run(){
     local docker_args=""
 
     #通过shift和while循环处理参数
-    while true
+    while [[ $# -gt 0 ]]
     do
       case "$1" in
           --http-port)
@@ -381,6 +381,8 @@ function run(){
   if [ $inner_db = 'true' ]; then
     extra_volumes="$extra_volumes -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
   fi
+
+  sed -i '/JOB_SUBMIT_NODE_HOSTNAME/s/""/"localhost"/' /etc/lico/lico.ini.d/job.ini
 
   check_file_exists "/etc/nslcd.conf"
   check_file_exists "/etc/munge/munge.key"
