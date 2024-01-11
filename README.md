@@ -36,8 +36,31 @@ chmod +x /usr/bin/lico-control
 ./build.sh --genSslCert 
 ```
 
+### 3. Prepare script
+If the host OS is based on Ubuntu,please update the deploy script as below, 
+otherwise please skip this step:
 
-### 3. Build docker image
+```shell
+vi /usr/bin/lico-control
+```
+
+**Navigate the ENSURE_PATH globle variable， replace the "/opt/ohpc/pub" path with your real hpc module path. For Ubuntu OS the default hpc module path is /opt/hpc/pub, the change is shown as below.**
+
+```bash
+ENSURE_PATH=("/root/.ssh" "/etc/libuser.conf" "/etc/lico"  "/opt/hpc/pub" "/etc/localtime")
+```
+**Modify start script**
+```shell
+vi openlico-docker/scripts/start
+```
+ **Add two lines before "lico start --start-only"**
+
+```shell
+mkdir -p /usr/lib/x86_64-linux-gnu/
+ln -s /usr/lib64/slurm /usr/lib/x86_64-linux-gnu/slurm-wlm
+```
+
+### 4. Build docker image
 
 ```sh
 # Default
@@ -50,7 +73,7 @@ chmod +x /usr/bin/lico-control
 
 
 
-### 4. Prepare mount folder and config file 
+### 5. Prepare mount folder and config file
 
 ```sh
 lico-control prepare
@@ -160,7 +183,7 @@ password = "<password>"
 
 
 
-### 5. Initial data for openlico
+### 6. Initial data for openlico
 
 **If using mariadb and influxdb inside the container, run this command**
 ```shell
@@ -172,7 +195,7 @@ lico-control init --mode all
 ```
 
 
-### 6. Create and run a new LiCO container from an image
+### 7. Create and run a new LiCO container from an image
 **If using mariadb and influxdb inside the container, run this command**
 ```shell
 lico-control run --inner-db true
@@ -189,3 +212,4 @@ lico-control stop        #Stop running LiCO container
 lico-control restart     #Restart LiCO container
 lico-control remove      #Remove LiCO container
 ```
+
