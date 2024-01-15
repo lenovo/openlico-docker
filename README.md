@@ -44,10 +44,10 @@ otherwise please skip this step:
 vi /usr/bin/lico-control
 ```
 
-**Navigate the ENSURE_PATH globle variable， replace the "/opt/ohpc/pub" path with your real hpc module path. For Ubuntu OS the default hpc module path is /opt/hpc/pub, the change is shown as below.**
+**Navigate the ENSURE_PATH globle variable， replace the "/opt/ohpc" path with your real hpc module path. For Ubuntu OS the default hpc module path is /opt/hpc, the change is shown as below.**
 
 ```bash
-ENSURE_PATH=("/root/.ssh" "/etc/libuser.conf" "/etc/lico"  "/opt/hpc/pub" "/etc/localtime")
+ENSURE_PATH=("/root/.ssh" "/etc/libuser.conf" "/etc/lico"  "/opt/hpc" "/etc/localtime")
 ```
 **Modify start script**
 ```shell

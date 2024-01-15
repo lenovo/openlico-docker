@@ -26,7 +26,7 @@ RUN  dnf module reset redis \
      && dnf install -y redis
 
 #influxdb
-RUN dnf install --nodocs -y https://dl.influxdata.com/influxdb/releases/influxdb-1.11.1.x86_64.rpm
+RUN dnf install --nodocs -y https://dl.influxdata.com/influxdb/releases/influxdb-1.8.10.x86_64.rpm
 
 #nginx
 RUN  dnf module reset nginx \

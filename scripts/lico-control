@@ -4,7 +4,7 @@ CONTAINER_NAME=lico
 LICO_INI_FILE=/etc/lico/lico.ini
 DB_MNT_DIR=/var/lib/lico_db_data
 ALERT_INI_FILE=/etc/lico/lico.ini.d/alert.ini
-ENSURE_PATH=("/root/.ssh" "/etc/slurm"  "/etc/libuser.conf" "/etc/lico"  "/opt/ohpc/pub" "/etc/localtime")
+ENSURE_PATH=("/root/.ssh" "/etc/slurm"  "/etc/libuser.conf" "/etc/lico"  "/opt/ohpc" "/etc/localtime")
 ENSURE_VOLUMES=""
 
 
