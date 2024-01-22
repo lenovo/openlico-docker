@@ -291,6 +291,8 @@ function init() {
   else
     sed -i "/autostart/,/autorestart/s/true/false/" /etc/lico/lico.supervisor.d/influx.ini
     sed -i "/autostart/,/autorestart/s/true/false/" /etc/lico/lico.supervisor.d/mariadb.ini
+    sed -i '/\[DATABASE\]/,/\[/{ s/#HOST = '\''127.0.0.1'\''/HOST = '\''127.0.0.1'\''/ }' /etc/lico/lico.ini
+    sed -i '/\[DATABASE\]/,/\[/{ s/#PORT = 3306/PORT = 3306/ }' /etc/lico/lico.ini
   fi
 
   extra_volumes="$extra_volumes -v /etc/skel:/etc/skel \
@@ -377,6 +379,7 @@ function run(){
   if [ -n "$oneapi_path" ]; then
     echo "mount intel oneapi path: ${oneapi_path}"
     extra_volumes="$extra_volumes -v $oneapi_path:$oneapi_path "
+    ENSURE_PATH+=("/etc/profile.d/lmod_oneapi.sh")
   fi
   if [ $inner_db = 'true' ]; then
     extra_volumes="$extra_volumes -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
