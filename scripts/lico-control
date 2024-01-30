@@ -218,6 +218,7 @@ function prepare() {
   docker cp ${CONTAINER_NAME}:/etc/lico/ /etc
 
   docker stop ${CONTAINER_NAME} && docker rm ${CONTAINER_NAME}
+  sed -i '/JOB_SUBMIT_NODE_HOSTNAME/s/""/"localhost"/' /etc/lico/lico.ini.d/job.ini
   echo "Prepare mount folder and config files finished"
 }
 
@@ -384,8 +385,6 @@ function run(){
   if [ $inner_db = 'true' ]; then
     extra_volumes="$extra_volumes -v $DB_MNT_DIR/mysql:/var/lib/mysql -v  $DB_DB_MNT_DIR/influxdb:/var/lib/influxdb"
   fi
-
-  sed -i '/JOB_SUBMIT_NODE_HOSTNAME/s/""/"localhost"/' /etc/lico/lico.ini.d/job.ini
 
   check_file_exists "/etc/nslcd.conf"
   check_file_exists "/etc/munge/munge.key"
